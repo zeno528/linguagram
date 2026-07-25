@@ -372,6 +372,8 @@ async function runFolderAnalysis(projectName: string, collect: () => Promise<Col
   analysisSource.value = 'local'
   cancelToken = { aborted: false }
   currentController = new AbortController()
+  // Load chart chunks while the local files are being collected and analyzed.
+  void loadEcharts()
   isBusy.value = true
   errorMsg.value = ''
   result.value = null
@@ -469,6 +471,8 @@ async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>) {
   analysisSource.value = source
   cancelToken = { aborted: false }
   currentController = new AbortController()
+  // Load chart chunks while the GitHub request is in flight.
+  void loadEcharts()
 
   isBusy.value = true
   errorMsg.value = ''
