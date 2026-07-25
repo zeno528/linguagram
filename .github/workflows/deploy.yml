@@ -1,14 +1,14 @@
-name: Deploy to osaka
+name: Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Don't cancel a run already mid-deploy — a half-applied binary on osaka
+# Don't cancel a run already mid-deploy — a half-applied binary on the server
 # would conflict with the next attempt's mv and break the systemd unit.
 concurrency:
-  group: deploy-osaka
+  group: deploy-prod
   cancel-in-progress: false
 
 # Read-only access to the repo. No write/dispatch/PR/issue permissions are
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Build + deploy linux binary to jp-osaka
+    name: Build + deploy
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
