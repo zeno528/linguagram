@@ -99,7 +99,9 @@ html::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
 html::-webkit-scrollbar-corner { background: var(--page-bg); }
 
 /* Static colored mesh background — fixed, NOT animated (§14 avoids full-viewport
-   moving backgrounds that trigger vestibular discomfort). */
+   moving backgrounds that trigger vestibular discomfort). The same mesh is used
+   on both themes; dark uses lower alpha (below) because saturated fills carry
+   more weight on a dark canvas. */
 body {
   color: var(--fg);
   background-color: var(--page-bg);
@@ -112,8 +114,15 @@ body {
   background-repeat: no-repeat;
 }
 
+/* Same blob geometry as light, but with each fill alpha trimmed ~35%. On
+   dark canvas even small alpha reads as saturated glow, so leaving the
+   light values would over-saturate the four corners. */
 :root[data-theme='dark'] body {
-  background-image: none;
+  background-image:
+    radial-gradient( 900px 700px at  10% -10%, rgba(120, 170, 255, 0.30) 0%, rgba(120,170,255,0) 60%),
+    radial-gradient( 820px 620px at 110%   4%, rgba(190, 150, 255, 0.28) 0%, rgba(190,150,255,0) 58%),
+    radial-gradient( 720px 620px at  92% 112%, rgba(255, 170, 200, 0.24) 0%, rgba(255,170,200,0) 60%),
+    radial-gradient( 720px 600px at  -6% 100%, rgba(140, 220, 200, 0.24) 0%, rgba(140,220,200,0) 60%);
 }
 
 #app {
