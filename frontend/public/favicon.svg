@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Linguagram">
+  <title>Linguagram</title>
+  <!-- GitHub green is the single product accent; the bars represent a language breakdown. -->
+  <rect x="2" y="2" width="28" height="28" rx="8" fill="#2da44e"/>
+  <path fill="#fff" d="M8 20a2 2 0 0 1 2-2h1v6H8zm6-6a2 2 0 0 1 2-2h1v12h-3zm6-4a2 2 0 0 1 2-2h1v16h-3z"/>
+</svg>

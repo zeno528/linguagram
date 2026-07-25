@@ -1,0 +1,116 @@
+name: Deploy to osaka
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Don't cancel a run already mid-deploy — a half-applied binary on osaka
+# would conflict with the next attempt's mv and break the systemd unit.
+concurrency:
+  group: deploy-osaka
+  cancel-in-progress: false
+
+# Read-only access to the repo. No write/dispatch/PR/issue permissions are
+# needed for a build+deploy job; tightest least-privilege setting possible.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build + deploy linux binary to jp-osaka
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      BINARY_NAME: lang-analyzer-linux
+      LANG_PORT: '18080'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Go 1.26
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.26'
+
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: frontend/node_modules
+          key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Cache Go modules
+        uses: actions/cache@v6
+        with:
+          path: ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('backend/go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+
+      - name: Frontend build
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Embed frontend dist into Go binary
+        run: |
+          rm -rf backend/dist
+          cp -r frontend/dist backend/dist
+
+      - name: Build Go binary (linux/amd64, static)
+        working-directory: backend
+        env:
+          CGO_ENABLED: '0'
+          GOOS: 'linux'
+          GOARCH: 'amd64'
+        run: |
+          go build -trimpath -ldflags='-s -w' -o "$BINARY_NAME" .
+
+      - name: Setup SSH
+        env:
+          LANG_DEPLOY_SSH_KEY: ${{ secrets.LANG_DEPLOY_SSH_KEY }}
+          LANG_DEPLOY_HOST: ${{ secrets.LANG_DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$LANG_DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Scrape the live ed25519 host key and pin it in a fresh known_hosts.
+          # ssh-keyscan is TOFU but both scan and subsequent scp run on the same
+          # ephemeral runner within seconds — MITM window is negligible.
+          ssh-keyscan -t ed25519 "$LANG_DEPLOY_HOST" > ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload binary
+        env:
+          LANG_DEPLOY_HOST: ${{ secrets.LANG_DEPLOY_HOST }}
+          LANG_DEPLOY_USER: ${{ secrets.LANG_DEPLOY_USER }}
+        run: |
+          scp -o StrictHostKeyChecking=yes \
+            backend/"$BINARY_NAME" \
+            "$LANG_DEPLOY_USER@$LANG_DEPLOY_HOST:/usr/local/bin/$BINARY_NAME.new"
+
+      - name: Atomic replace + restart + verify
+        env:
+          LANG_DEPLOY_HOST: ${{ secrets.LANG_DEPLOY_HOST }}
+          LANG_DEPLOY_USER: ${{ secrets.LANG_DEPLOY_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=yes "$LANG_DEPLOY_USER@$LANG_DEPLOY_HOST" \
+            "mv -f /usr/local/bin/$BINARY_NAME.new /usr/local/bin/lang-analyzer && \
+             chmod +x /usr/local/bin/lang-analyzer && \
+             systemctl restart lang-analyzer && \
+             sleep 2 && \
+             systemctl is-active --quiet lang-analyzer && \
+             curl -fsS -o /dev/null -w 'health -> HTTP %{http_code}\n' --max-time 10 http://127.0.0.1:$LANG_PORT/health && \
+             echo '=== deploy ok ==='"

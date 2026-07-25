@@ -1,0 +1,54 @@
+# ===== 依赖 =====
+node_modules/
+.pnpm-store/
+
+# ===== 前端构建产物 =====
+dist/
+build/
+frontend/node_modules/.vite/
+
+# ===== Go 编译产物 =====
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# ===== 日志 =====
+*.log
+stdout.log
+stderr.log
+vite.log
+vite-err.log
+
+# ===== 环境变量 / 密钥 =====
+.env
+.env.*
+!.env.example
+
+# ===== 操作系统 / 编辑器 =====
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ===== TypeScript 增量编译缓存 =====
+*.tsbuildinfo
+
+
+# ===== 交叉编译产物 =====
+backend/lang-analyzer-linux
+backend/lang-analyzer.exe
+
+# ===== 本地部署密钥（仅本机生成后送到 GitHub Secrets 用，绝不入仓）=====
+.deploy-keys/
+
+# ===== 本地部署脚本（依赖本机 SSH 配置，不入仓）=====
+build.ps1
+deploy.ps1
+
+# ===== Claude superpowers skill 本地工作区（不入仓）=====
+docs/superpowers/
+
