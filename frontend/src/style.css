@@ -98,31 +98,35 @@ html::-webkit-scrollbar-thumb {
 html::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
 html::-webkit-scrollbar-corner { background: var(--page-bg); }
 
-/* Static colored mesh background — fixed, NOT animated (§14 avoids full-viewport
-   moving backgrounds that trigger vestibular discomfort). The same mesh is used
-   on both themes; dark uses lower alpha (below) because saturated fills carry
-   more weight on a dark canvas. */
+/* Refined 4-corner mesh: same hue family as before (cool blue → lavender →
+   mauve → sage) but tuned for "锦上添花", not "stamped sticker":
+   - alpha cut ~55% so corners read as ambient tint, not blobs
+   - radii enlarged ~70% so the visible part is just the gentle center
+     (hard gradient falloff sits off-canvas)
+   - hues desaturated slightly to harmonize with page-bg's neutral tone
+     instead of fighting it
+   Static and NOT animated (§14 vestibular concern). */
 body {
   color: var(--fg);
   background-color: var(--page-bg);
   background-image:
-    radial-gradient( 900px 700px at  10% -10%, rgba(120, 170, 255, 0.45) 0%, rgba(120,170,255,0) 60%),
-    radial-gradient( 820px 620px at 110%   4%, rgba(190, 150, 255, 0.42) 0%, rgba(190,150,255,0) 58%),
-    radial-gradient( 720px 620px at  92% 112%, rgba(255, 170, 200, 0.36) 0%, rgba(255,170,200,0) 60%),
-    radial-gradient( 720px 600px at  -6% 100%, rgba(140, 220, 200, 0.34) 0%, rgba(140,220,200,0) 60%);
+    radial-gradient(1500px 1100px at   8% -12%, rgba(130, 160, 225, 0.20) 0%, rgba(130, 160, 225, 0) 72%),
+    radial-gradient(1300px 1000px at 108%   6%, rgba(175, 150, 225, 0.18) 0%, rgba(175, 150, 225, 0) 68%),
+    radial-gradient(1200px 1000px at  92% 110%, rgba(230, 170, 195, 0.14) 0%, rgba(230, 170, 195, 0) 70%),
+    radial-gradient(1200px 1000px at  -4% 100%, rgba(155, 205, 195, 0.14) 0%, rgba(155, 205, 195, 0) 70%);
   background-attachment: fixed;
   background-repeat: no-repeat;
 }
 
-/* Same blob geometry as light, but with each fill alpha trimmed ~35%. On
-   dark canvas even small alpha reads as saturated glow, so leaving the
-   light values would over-saturate the four corners. */
+/* Dark: identical geometry, alpha trimmed further (~65% of light values)
+   because #1a1a1c amplifies saturated fills. Same hue family, slightly
+   cooler RGB to match the Apple-style canvas tint. */
 :root[data-theme='dark'] body {
   background-image:
-    radial-gradient( 900px 700px at  10% -10%, rgba(120, 170, 255, 0.30) 0%, rgba(120,170,255,0) 60%),
-    radial-gradient( 820px 620px at 110%   4%, rgba(190, 150, 255, 0.28) 0%, rgba(190,150,255,0) 58%),
-    radial-gradient( 720px 620px at  92% 112%, rgba(255, 170, 200, 0.24) 0%, rgba(255,170,200,0) 60%),
-    radial-gradient( 720px 600px at  -6% 100%, rgba(140, 220, 200, 0.24) 0%, rgba(140,220,200,0) 60%);
+    radial-gradient(1500px 1100px at   8% -12%, rgba(140, 165, 220, 0.13) 0%, rgba(140, 165, 220, 0) 72%),
+    radial-gradient(1300px 1000px at 108%   6%, rgba(180, 155, 220, 0.11) 0%, rgba(180, 155, 220, 0) 68%),
+    radial-gradient(1200px 1000px at  92% 110%, rgba(225, 170, 195, 0.09) 0%, rgba(225, 170, 195, 0) 70%),
+    radial-gradient(1200px 1000px at  -4% 100%, rgba(155, 200, 190, 0.09) 0%, rgba(155, 200, 190, 0) 70%);
 }
 
 #app {

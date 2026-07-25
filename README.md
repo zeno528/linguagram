@@ -8,7 +8,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![ECharts](https://img.shields.io/badge/ECharts-AA344D?style=flat-square&logo=apacheecharts&logoColor=white)](https://echarts.apache.org)
 
-<p align="center"><img src="docs/preview-1.jpeg" width="600" alt="Linguagram 预览"/></p>
+<p align="center"><img src="docs/preview-light.png" width="600" alt="Linguagram 浅色主题预览"/></p>
+<p align="center"><img src="docs/preview-dark.png" width="600" alt="Linguagram 深色主题预览"/></p>
 
 ## 项目说明
 

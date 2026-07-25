@@ -930,18 +930,24 @@ onBeforeUnmount(() => {
   </header>
 
   <section v-if="showImportPanel || !result" class="scan-card">
+    <!-- Dropzone is the folder-specific entry UI; hide it during analysis
+         (any source — local/GitHub/profile) so its placeholder text doesn't
+         echo the progress status and confuse the user about which entry is
+         analyzing. GitHub URL + profile picker below stay mounted as the
+         disabled "this is the other entry you could've used" affordance. -->
     <div
+      v-if="!isBusy"
       class="dropzone"
-      :class="{ over: dragOver, disabled: isBusy }"
+      :class="{ over: dragOver }"
       @dragenter.prevent="dragOver = true"
       @dragover.prevent="dragOver = true"
       @dragleave.prevent="dragOver = false"
       @drop="handleDrop"
     >
       <div class="dz-icon">📁</div>
-      <p class="dz-title">{{ isBusy ? progressText : '把项目文件夹拖到这里' }}</p>
+      <p class="dz-title">把项目文件夹拖到这里</p>
       <p class="dz-hint">拖拽无响应时，可改用下方选择文件夹</p>
-      <button class="folder-picker" type="button" :disabled="isBusy" @click="openFolderPicker">选择文件夹</button>
+      <button class="folder-picker" type="button" @click="openFolderPicker">选择文件夹</button>
     </div>
     <input
       id="folder-input"
