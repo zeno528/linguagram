@@ -615,12 +615,18 @@ header p {
 
 /* ---------------- responsive ---------------- */
 @media (max-width: 720px) {
-  #app { padding: 32px 16px 56px; }
+  /* Trim page padding so the glass cards reach closer to the viewport edge,
+     and trim the result-card's own padding so the chart + language list
+     inside have more horizontal room. Scan / progress cards keep the base
+     24px padding — the result card is the one that benefits most here,
+     since it holds the densest content. */
+  #app { padding: 28px 12px 48px; }
+  .result-card { padding: 14px; }
   header h1 { font-size: 28px; }
   header .logo { width: 32px; height: 32px; }
   header .brand-lockup { gap: 10px; }
   header p { margin-left: 42px; }
-  .lang-grid { grid-template-columns: 1fr; }
+  .lang-grid { grid-template-columns: 1fr; gap: 16px; }
   .chart-box { height: 280px; }
   .language-panel { min-height: 420px; max-height: 420px; }
 

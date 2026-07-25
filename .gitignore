@@ -52,3 +52,6 @@ deploy.ps1
 # ===== Claude superpowers skill 本地工作区（不入仓）=====
 docs/superpowers/
 
+# ===== Claude 项目级 skill（不入仓）=====
+.claude/skills/
+

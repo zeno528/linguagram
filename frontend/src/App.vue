@@ -1284,7 +1284,7 @@ onBeforeUnmount(() => {
   </motion.section>
 
   <footer class="site-footer">
-    © {{ copyrightYear }} Linguagram · 作者 Scott · 保留所有权利。
+    © {{ copyrightYear }} Linguagram · made by Scott
   </footer>
 
   <ToastHost />
