@@ -1225,8 +1225,8 @@ onBeforeUnmount(() => {
             <table class="lang-table">
               <thead>
                 <tr>
-                  <th style="width: 30%">语言</th>
-                  <th style="width: 14%">占比</th>
+                  <th style="width: 26%">语言</th>
+                  <th style="width: 18%">占比</th>
                   <th style="width: 18%">字节数</th>
                   <th style="width: 38%">技术栈版本</th>
                 </tr>

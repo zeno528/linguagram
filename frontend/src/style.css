@@ -48,26 +48,30 @@
 }
 
 :root[data-theme='dark'] {
-  /* GitHub Primer dark roles: blue-tinted canvas, raised neutral surfaces,
-     and clear #30363d borders instead of a near-black glass treatment. */
-  --fg:              #e6edf3;
-  --muted:           #8b949e;
-  --accent:          #58a6ff;
+  /* Apple-style dark mode: lifted warm-gray canvas (#1a1a1c) with 1-2% blue
+     tint, surface lifted one tier (#24242a), 8/14% white-on-black hairlines
+     (replaces Primer's near-black hairlines that read as muddy). Off-white
+     text (#ececec) dodges pure-white halation; accent alpha trimmed (0.18
+     not 0.22) because saturated fills carry more weight on dark backgrounds.
+     See report on 2025 mainstream dark palettes (Material 3, Figma, Slack). */
+  --fg:              #ececec;
+  --muted:           #9c9ca8;
+  --accent:          #5e9cff;                       /* Apple systemBlue, lifted */
   --accent-press:    #1f6feb;
-  --accent-soft:     rgba(56, 139, 253, 0.22);
+  --accent-soft:     rgba(94, 156, 255, 0.18);
   --danger:          #ff7b72;
   --success:         #3fb950;
-  --hairline:        #30363d;
-  --hairline-strong: #484f58;
-  --chart-gridline:  rgba(240, 246, 252, 0.07);
-  --page-bg:         #0d1117;
-  --tooltip-bg:      #161b22;
-  --pie-seam:        #161b22;
-  --surface:         #161b22;
-  --surface-solid:   #161b22;
-  --surface-inset:   #0d1117;
-  --highlight-edge:  #30363d;
-  --shadow-1:        0 1px 2px rgba(1, 4, 9, 0.35);
+  --hairline:        rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+  --chart-gridline:  rgba(255, 255, 255, 0.05);
+  --page-bg:         #1a1a1c;
+  --tooltip-bg:      #24242a;                       /* ride surface — no sunken look */
+  --pie-seam:        #24242a;                       /* match surface, hide slice joins */
+  --surface:         #24242a;
+  --surface-solid:   #24242a;
+  --surface-inset:   #15151a;
+  --highlight-edge:  rgba(255, 255, 255, 0.06);
+  --shadow-1:        0 1px 2px rgba(0, 0, 0, 0.5), 0 6px 20px rgba(0, 0, 0, 0.4);
 }
 
 * { box-sizing: border-box; }
