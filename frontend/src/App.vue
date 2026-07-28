@@ -45,7 +45,7 @@ import {
   siVuedotjs,
 } from 'simple-icons'
 import type { SimpleIcon } from 'simple-icons'
-import { scanFiles, scanGitHub, listGitHubProfileRepos, formatBytes } from './api'
+import { scanFiles, scanGitHub, listGitHubBranches, listGitHubProfileRepos, formatBytes } from './api'
 import type { PublicRepo, ScanResponse, UploadFile } from './types'
 import AppButton from './components/AppButton.vue'
 import AppProgress from './components/AppProgress.vue'
@@ -94,6 +94,10 @@ const profileRepos = ref<PublicRepo[]>([])
 const profileOwner = ref('')
 const profileQuery = ref('')
 const isProfileLoading = ref(false)
+const githubBranches = ref<string[]>([])
+const githubBranchesForUrl = ref('')
+const isBranchPickerLoading = ref(false)
+const isBranchPickerOpen = ref(false)
 const showImportPanel = ref(true)
 const isProfilePickerOpen = ref(false)
 const isProfileOwnerEditorOpen = ref(false)
@@ -528,13 +532,14 @@ async function handleFolderSelection(e: Event) {
 // ---------- github url mode ----------
 // 复用 drop 模式的 isBusy/progress/result 状态与 cancel 机制，只换数据源：
 // 后端下载 tarball 后用同一套 go-enry 分类，结果展示完全一致。
-async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>) {
+async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>, branch?: string) {
   const url = githubUrl.value.trim()
   if (!url) return
   rememberUrl('repo', url)
 
   analysisSource.value = source
   hideImportDuringAnalysis()
+  isBranchPickerOpen.value = false
   cancelToken = { aborted: false }
   currentController = new AbortController()
   // Load chart chunks while the GitHub request is in flight.
@@ -547,7 +552,7 @@ async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>) {
   progressText.value = '正在下载并分析仓库…'
 
   try {
-    result.value = await scanGitHub(url, { signal: currentController.signal })
+    result.value = await scanGitHub(url, { signal: currentController.signal, branch })
     if (cancelToken.aborted) throw new DOMException('Aborted', 'AbortError')
     progress.value = 100
   } catch (e: any) {
@@ -702,6 +707,34 @@ async function loadProfileRepos() {
   } finally {
     isProfileLoading.value = false
   }
+}
+
+async function openGithubBranchPicker() {
+  const repoURL = result.value?.githubUrl
+  if (!repoURL || isBranchPickerLoading.value) return
+  if (githubBranchesForUrl.value !== repoURL) {
+    isBranchPickerLoading.value = true
+    try {
+      githubBranches.value = (await listGitHubBranches(repoURL)).branches
+      githubBranchesForUrl.value = repoURL
+    } catch (e: any) {
+      toast.error(e.message ?? String(e))
+      return
+    } finally {
+      isBranchPickerLoading.value = false
+    }
+  }
+  isBranchPickerOpen.value = !isBranchPickerOpen.value
+}
+
+function analyzeGithubBranch(branch: string) {
+  const repoURL = result.value?.githubUrl
+  if (!repoURL || branch === result.value?.branch) {
+    isBranchPickerOpen.value = false
+    return
+  }
+  githubUrl.value = repoURL
+  void analyzeGithub(analysisSource.value === 'profile' ? 'profile' : 'repo', branch)
 }
 
 function analyzeProfileRepo(repo: PublicRepo) {
@@ -1359,6 +1392,31 @@ onBeforeUnmount(() => {
           共 {{ formatBytes(result.totalBytes) }} · {{ result.languages.length }} 种语言
           <span v-if="topLang"> · 主要 <strong>{{ topLang.name }}</strong> {{ topLang.percentage }}%</span>
         </span>
+        <div v-if="result.githubUrl" class="branch-control">
+          <span>当前分支</span>
+          <button
+            type="button"
+            class="branch-toggle"
+            :aria-expanded="isBranchPickerOpen"
+            aria-controls="github-branch-list"
+            :disabled="isBranchPickerLoading"
+            @click="openGithubBranchPicker"
+          >
+            <span class="branch-label">{{ isBranchPickerLoading ? '读取分支…' : result.branch || '默认分支' }}</span>
+            <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          </button>
+          <div v-if="isBranchPickerOpen" id="github-branch-list" class="github-branch-list" role="menu">
+            <p>选择分支后会重新分析。</p>
+            <button
+              v-for="branch in githubBranches"
+              :key="branch"
+              type="button"
+              role="menuitem"
+              :class="{ active: branch === result.branch }"
+              @click="analyzeGithubBranch(branch)"
+            >{{ branch }}</button>
+          </div>
+        </div>
       </div>
 
       <!-- GitHub-style horizontal bar; segments grow out from the left, staggered -->

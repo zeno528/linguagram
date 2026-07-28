@@ -50,6 +50,15 @@ cd frontend && pnpm install && pnpm dev
 
 打开 http://127.0.0.1:5173 ，把项目文件夹拖进去即可。
 
+### GitHub API（可选）
+
+公开仓库默认可匿名读取；部署给多人使用时，可仅在**后端进程环境变量**设置 `GITHUB_TOKEN`，提高 GitHub REST API 的限额。使用细粒度令牌时只授予目标公开仓库的 `Contents: Read` 权限；不要把令牌写入前端代码、`.env` 提交记录或浏览器配置。
+
+```ini
+# systemd service 示例
+Environment=GITHUB_TOKEN=ghp_...
+```
+
 ## 部署
 
 前端 `dist` 由 Go `embed` 打进单二进制，前置反代（Caddy/Nginx）指向 `127.0.0.1:18080`，systemd 管进程。

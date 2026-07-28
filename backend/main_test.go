@@ -1,6 +1,39 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strconv"
+	"testing"
+	"time"
+)
+
+func TestGitHubAPIRequestKeepsTokenServerSide(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "test-token")
+	req, err := newGitHubAPIRequest(context.Background(), "https://api.github.com/repos/octocat/Hello-World")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer test-token" {
+		t.Fatalf("authorization = %q", got)
+	}
+}
+
+func TestGitHubRateLimitErrorIncludesResetTime(t *testing.T) {
+	reset := time.Now().Add(time.Minute).Unix()
+	resp := &http.Response{StatusCode: http.StatusForbidden, Header: make(http.Header)}
+	resp.Header.Set("X-RateLimit-Remaining", "0")
+	resp.Header.Set("X-RateLimit-Reset", strconv.FormatInt(reset, 10))
+	err := githubAPIResponseError(resp)
+	var apiErr *githubAPIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error type = %T", err)
+	}
+	if apiErr.status != http.StatusTooManyRequests {
+		t.Fatalf("status = %d", apiErr.status)
+	}
+}
 
 func TestDetectDeclaredVersions(t *testing.T) {
 	tests := []struct {

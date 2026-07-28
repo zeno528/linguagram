@@ -11,6 +11,7 @@ export interface ScanResponse {
   totalBytes: number
   projectName: string
   githubUrl?: string
+  branch?: string
 }
 
 export interface PublicRepo {
@@ -26,6 +27,10 @@ export interface PublicRepo {
 export interface PublicRepoList {
   owner: string
   repos: PublicRepo[]
+}
+
+export interface GitHubBranchList {
+  branches: string[]
 }
 
 // One file in a drag-and-drop upload manifest. Content is the first 16 KB,

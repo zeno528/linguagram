@@ -1,4 +1,4 @@
-import type { PublicRepoList, ScanResponse, UploadFile } from './types'
+import type { GitHubBranchList, PublicRepoList, ScanResponse, UploadFile } from './types'
 
 const API_BASE = '/api'
 
@@ -32,12 +32,12 @@ export async function scanFiles(
 // the UI abort via the shared AbortController, same as scanFiles.
 export async function scanGitHub(
   url: string,
-  opts: { signal?: AbortSignal } = {},
+  opts: { signal?: AbortSignal; branch?: string } = {},
 ): Promise<ScanResponse> {
   const r = await fetch(`${API_BASE}/scan-github`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, branch: opts.branch }),
     signal: opts.signal,
   })
   if (!r.ok) {
@@ -52,6 +52,23 @@ export async function listGitHubProfileRepos(
   opts: { signal?: AbortSignal } = {},
 ): Promise<PublicRepoList> {
   const r = await fetch(`${API_BASE}/github-profile-repos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+    signal: opts.signal,
+  })
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ error: r.statusText }))
+    throw new Error(err.error || `HTTP ${r.status}`)
+  }
+  return r.json()
+}
+
+export async function listGitHubBranches(
+  url: string,
+  opts: { signal?: AbortSignal } = {},
+): Promise<GitHubBranchList> {
+  const r = await fetch(`${API_BASE}/github-branches`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),

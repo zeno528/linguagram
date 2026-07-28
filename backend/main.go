@@ -9,17 +9,20 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +64,7 @@ type ScanResponse struct {
 	TotalBytes  int64          `json:"totalBytes"`
 	ProjectName string         `json:"projectName"`
 	GitHubURL   string         `json:"githubUrl,omitempty"`
+	Branch      string         `json:"branch,omitempty"`
 }
 
 // PublicRepo is the compact, safe subset of GitHub repository metadata shown
@@ -107,6 +111,7 @@ func main() {
 	r.POST("/api/scan-files", handleScanFiles)
 	r.POST("/api/scan-github", handleScanGitHub)
 	r.POST("/api/github-profile-repos", handleGitHubProfileRepos)
+	r.POST("/api/github-branches", handleGitHubBranches)
 
 	// Serve the embedded frontend. Registered routes (/api, /health) match
 	// first; everything else falls through to NoRoute → static asset, or
@@ -236,10 +241,120 @@ func handleScanFiles(c *gin.Context) {
 var githubURLRe = regexp.MustCompile(`^https?://(?:www\.)?github\.com/([A-Za-z0-9._-]+)/([A-Za-z0-9._-]+?)(?:\.git)?(?:/tree/([A-Za-z0-9._-]+))?(?:[/?#].*)?$`)
 var githubProfileURLRe = regexp.MustCompile(`^https?://(?:www\.)?github\.com/([A-Za-z0-9-]+)(?:/?(?:[?#].*)?)?$`)
 
-// maxGitHubDownload caps the tarball download so a huge repo can't exhaust
-// memory. 200 MB covers most source repos (node_modules etc. are absent from
-// git archives, so archives are far smaller than a full clone).
-const maxGitHubDownload = 200 * 1024 * 1024
+// The download cap protects network and compressed input size. The archive
+// limits additionally bound decompression work for unusually large repos.
+const (
+	maxGitHubDownload         = 200 * 1024 * 1024
+	maxGitHubArchiveBytes     = 512 * 1024 * 1024
+	maxGitHubArchiveFileCount = 100_000
+	githubDefaultBranchTTL    = 15 * time.Minute
+	githubListTTL             = 5 * time.Minute
+	githubCacheCapacity       = 128
+)
+
+type cacheEntry[T any] struct {
+	value     T
+	expiresAt time.Time
+}
+
+// boundedTTLCache keeps transient GitHub metadata close to the API boundary.
+// It is deliberately small: stale data expires quickly and cache pressure
+// simply evicts one entry rather than growing process memory.
+type boundedTTLCache[T any] struct {
+	mu       sync.Mutex
+	entries  map[string]cacheEntry[T]
+	capacity int
+}
+
+func newBoundedTTLCache[T any](capacity int) *boundedTTLCache[T] {
+	return &boundedTTLCache[T]{entries: make(map[string]cacheEntry[T]), capacity: capacity}
+}
+
+func (c *boundedTTLCache[T]) get(key string) (T, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[key]
+	if !ok || !time.Now().Before(entry.expiresAt) {
+		if ok {
+			delete(c.entries, key)
+		}
+		var zero T
+		return zero, false
+	}
+	return entry.value, true
+}
+
+func (c *boundedTTLCache[T]) set(key string, value T, ttl time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.entries[key]; !exists && len(c.entries) >= c.capacity {
+		for key, entry := range c.entries {
+			if !time.Now().Before(entry.expiresAt) {
+				delete(c.entries, key)
+			}
+		}
+		if len(c.entries) >= c.capacity {
+			for key := range c.entries {
+				delete(c.entries, key)
+				break
+			}
+		}
+	}
+	c.entries[key] = cacheEntry[T]{value: value, expiresAt: time.Now().Add(ttl)}
+}
+
+type githubProfileRepoList struct {
+	Owner string
+	Repos []PublicRepo
+}
+
+var (
+	defaultBranchCache = newBoundedTTLCache[string](githubCacheCapacity)
+	profileRepoCache   = newBoundedTTLCache[githubProfileRepoList](githubCacheCapacity)
+	branchCache        = newBoundedTTLCache[[]string](githubCacheCapacity)
+)
+
+type githubAPIError struct {
+	status  int
+	message string
+}
+
+func (e *githubAPIError) Error() string { return e.message }
+
+func newGitHubAPIRequest(ctx context.Context, apiURL string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "linguagram")
+	req.Header.Set("X-GitHub-Api-Version", "2026-03-10")
+	if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return req, nil
+}
+
+func githubAPIResponseError(resp *http.Response) error {
+	if resp.StatusCode == http.StatusTooManyRequests ||
+		(resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0") {
+		message := "GitHub API 请求过于频繁"
+		if reset, err := strconv.ParseInt(resp.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
+			message += "，请在 " + time.Unix(reset, 0).Local().Format("15:04") + " 后重试"
+		}
+		return &githubAPIError{status: http.StatusTooManyRequests, message: message}
+	}
+	return &githubAPIError{status: http.StatusBadGateway, message: fmt.Sprintf("GitHub API 返回 %d", resp.StatusCode)}
+}
+
+func writeGitHubAPIError(c *gin.Context, err error, fallback string) {
+	var apiErr *githubAPIError
+	if errors.As(err, &apiErr) {
+		c.JSON(apiErr.status, gin.H{"error": apiErr.message})
+		return
+	}
+	c.JSON(http.StatusBadGateway, gin.H{"error": fallback + "：" + err.Error()})
+}
 
 // handleGitHubProfileRepos lists repositories owned by a public GitHub user.
 // Forks and archived repositories are hidden because they are usually not the
@@ -255,6 +370,11 @@ func handleGitHubProfileRepos(c *gin.Context) {
 	m := githubProfileURLRe.FindStringSubmatch(strings.TrimSpace(req.URL))
 	if m == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "不是有效的 GitHub 作者主页链接（示例：https://github.com/owner）"})
+		return
+	}
+	cacheKey := strings.ToLower(m[1])
+	if cached, ok := profileRepoCache.get(cacheKey); ok {
+		c.JSON(http.StatusOK, gin.H{"owner": cached.Owner, "repos": cached.Repos})
 		return
 	}
 
@@ -275,21 +395,20 @@ func handleGitHubProfileRepos(c *gin.Context) {
 	repos := make([]PublicRepo, 0)
 	for page := 1; ; page++ {
 		apiURL := fmt.Sprintf("https://api.github.com/users/%s/repos?type=owner&sort=updated&direction=desc&per_page=100&page=%d", m[1], page)
-		httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+		httpReq, err := newGitHubAPIRequest(ctx, apiURL)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "构建 GitHub 请求失败"})
 			return
 		}
-		httpReq.Header.Set("Accept", "application/vnd.github+json")
-		httpReq.Header.Set("User-Agent", "linguagram")
 		resp, err := http.DefaultClient.Do(httpReq)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"error": "获取公开仓库失败：" + err.Error()})
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
+			apiErr := githubAPIResponseError(resp)
 			resp.Body.Close()
-			c.JSON(http.StatusBadGateway, gin.H{"error": fmt.Sprintf("GitHub API 返回 %d（用户可能不存在或请求过于频繁）", resp.StatusCode)})
+			writeGitHubAPIError(c, apiErr, "获取公开仓库失败")
 			return
 		}
 		var data []githubRepo
@@ -316,7 +435,74 @@ func handleGitHubProfileRepos(c *gin.Context) {
 			break
 		}
 	}
+	profileRepoCache.set(cacheKey, githubProfileRepoList{Owner: m[1], Repos: repos}, githubListTTL)
 	c.JSON(http.StatusOK, gin.H{"owner": m[1], "repos": repos})
+}
+
+// handleGitHubBranches loads branches only when the result card asks for them.
+// Keeping this separate from scanning avoids an extra REST call on every repo.
+func handleGitHubBranches(c *gin.Context) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+	m := githubURLRe.FindStringSubmatch(strings.TrimSpace(req.URL))
+	if m == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不是有效的 GitHub 仓库链接"})
+		return
+	}
+	owner, repo := m[1], m[2]
+	cacheKey := strings.ToLower(owner + "/" + repo)
+	if cached, ok := branchCache.get(cacheKey); ok {
+		c.JSON(http.StatusOK, gin.H{"branches": cached})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
+	defer cancel()
+	type githubBranch struct {
+		Name string `json:"name"`
+	}
+	branches := make([]string, 0)
+	for page := 1; ; page++ {
+		apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/branches?per_page=100&page=%d", owner, repo, page)
+		httpReq, err := newGitHubAPIRequest(ctx, apiURL)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "构建 GitHub 请求失败"})
+			return
+		}
+		resp, err := http.DefaultClient.Do(httpReq)
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "读取仓库分支失败：" + err.Error()})
+			return
+		}
+		if resp.StatusCode != http.StatusOK {
+			apiErr := githubAPIResponseError(resp)
+			resp.Body.Close()
+			writeGitHubAPIError(c, apiErr, "读取仓库分支失败")
+			return
+		}
+		var data []githubBranch
+		err = json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&data)
+		resp.Body.Close()
+		if err != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"error": "解析 GitHub 分支列表失败"})
+			return
+		}
+		for _, branch := range data {
+			if branch.Name != "" {
+				branches = append(branches, branch.Name)
+			}
+		}
+		if len(data) < 100 {
+			break
+		}
+	}
+	branchCache.set(cacheKey, branches, githubListTTL)
+	c.JSON(http.StatusOK, gin.H{"branches": branches})
 }
 
 // handleScanGitHub downloads a public GitHub repo's tarball and runs the same
@@ -325,7 +511,8 @@ func handleGitHubProfileRepos(c *gin.Context) {
 // scope already matches GitHub Linguist's tracked-file view.
 func handleScanGitHub(c *gin.Context) {
 	var req struct {
-		URL string `json:"url"`
+		URL    string `json:"url"`
+		Branch string `json:"branch"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
@@ -337,19 +524,22 @@ func handleScanGitHub(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "不是有效的 GitHub 仓库链接（示例：https://github.com/owner/repo）"})
 		return
 	}
-	owner, repo, branch := m[1], m[2], m[3]
+	owner, repo, branch := m[1], m[2], strings.TrimSpace(req.Branch)
 
+	if branch == "" {
+		branch = m[3]
+	}
 	if branch == "" {
 		var err error
 		branch, err = defaultBranch(c.Request.Context(), owner, repo)
 		if err != nil {
-			c.JSON(http.StatusBadGateway, gin.H{"error": "无法获取仓库默认分支：" + err.Error()})
+			writeGitHubAPIError(c, err, "无法获取仓库默认分支")
 			return
 		}
 	}
 
 	// codeload.github.com serves the tar.gz directly off CDN (no API rate limit).
-	tarballURL := "https://codeload.github.com/" + owner + "/" + repo + "/tar.gz/refs/heads/" + branch
+	tarballURL := "https://codeload.github.com/" + owner + "/" + repo + "/tar.gz/refs/heads/" + url.PathEscape(branch)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 120*time.Second)
 	defer cancel()
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, tarballURL, nil)
@@ -379,6 +569,8 @@ func handleScanGitHub(c *gin.Context) {
 	bytesByLang := make(map[string]int64)
 	versionsByLang := make(map[string]string)
 	var totalBytes int64
+	var archiveBytes int64
+	fileCount := 0
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -390,6 +582,12 @@ func handleScanGitHub(c *gin.Context) {
 		}
 		if hdr.Typeflag != tar.TypeReg {
 			continue
+		}
+		fileCount++
+		archiveBytes += hdr.Size
+		if fileCount > maxGitHubArchiveFileCount || archiveBytes > maxGitHubArchiveBytes {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "仓库归档过大，最多支持 10 万个文件或 512 MB 解压后内容"})
+			return
 		}
 		// tarball 顶层目录是 "{repo}-{ref}"，strip 它得到仓库相对路径，
 		// classifyFile 的 vendor/dotfile heuristic 依赖相对路径。
@@ -416,6 +614,7 @@ func handleScanGitHub(c *gin.Context) {
 		TotalBytes:  totalBytes,
 		ProjectName: owner + "/" + repo,
 		GitHubURL:   strings.TrimSpace(req.URL),
+		Branch:      branch,
 	})
 }
 
@@ -423,22 +622,23 @@ func handleScanGitHub(c *gin.Context) {
 // repos need no token; the 60/h/IP anonymous limit is fine for a low-frequency
 // tool. GitHub requires a User-Agent header or it 403s.
 func defaultBranch(ctx context.Context, owner, repo string) (string, error) {
+	cacheKey := strings.ToLower(owner + "/" + repo)
+	if cached, ok := defaultBranchCache.get(cacheKey); ok {
+		return cached, nil
+	}
 	subCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(subCtx, http.MethodGet,
-		"https://api.github.com/repos/"+owner+"/"+repo, nil)
+	req, err := newGitHubAPIRequest(subCtx, "https://api.github.com/repos/"+owner+"/"+repo)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "linguagram")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub API 返回 %d", resp.StatusCode)
+		return "", githubAPIResponseError(resp)
 	}
 	var data struct {
 		DefaultBranch string `json:"default_branch"`
@@ -449,6 +649,7 @@ func defaultBranch(ctx context.Context, owner, repo string) (string, error) {
 	if data.DefaultBranch == "" {
 		return "", fmt.Errorf("未返回默认分支")
 	}
+	defaultBranchCache.set(cacheKey, data.DefaultBranch, githubDefaultBranchTTL)
 	return data.DefaultBranch, nil
 }
 
