@@ -98,6 +98,9 @@ const githubBranches = ref<string[]>([])
 const githubBranchesForUrl = ref('')
 const isBranchPickerLoading = ref(false)
 const isBranchPickerOpen = ref(false)
+const repoHistoryControl = ref<HTMLElement | null>(null)
+const profileHistoryControl = ref<HTMLElement | null>(null)
+const branchControl = ref<HTMLElement | null>(null)
 const showImportPanel = ref(true)
 const isProfilePickerOpen = ref(false)
 const isProfileOwnerEditorOpen = ref(false)
@@ -133,6 +136,17 @@ function rememberUrl(kind: HistoryKind, value: string) {
     window.localStorage.setItem(URL_HISTORY_STORAGE_KEY, JSON.stringify(urlHistory.value))
   } catch {
     // Browsers can disable local storage. Analysis stays available without it.
+  }
+}
+
+function clearUrlHistory() {
+  urlHistory.value = emptyUrlHistory()
+  showRepoHistory.value = false
+  showProfileHistory.value = false
+  try {
+    window.localStorage.removeItem(URL_HISTORY_STORAGE_KEY)
+  } catch {
+    // The in-memory records are still cleared when storage is unavailable.
   }
 }
 type ImportMode = 'local' | 'github'
@@ -213,16 +227,6 @@ const rowTransition = (index: number) => ({
   ...spring,
   delay: Math.min(0.1 + index * 0.04, 0.5),
 })
-// Keep a history panel mounted while records exist. Its own height is the only
-// changing layout value, so the surrounding form card follows without scaling.
-function historyState(isOpen: boolean) {
-  if (reduce.value) {
-    return { height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0, marginTop: isOpen ? 10 : 0 }
-  }
-  return isOpen
-    ? { ...expandAnimate, marginTop: 10 }
-    : { height: 0, opacity: 0, y: -8, marginTop: 0 }
-}
 const profilePickerInitial = expandInitial
 const profilePickerAnimate = computed(() => {
   return expandState(isProfilePickerOpen.value)
@@ -712,6 +716,8 @@ async function loadProfileRepos() {
 async function openGithubBranchPicker() {
   const repoURL = result.value?.githubUrl
   if (!repoURL || isBranchPickerLoading.value) return
+  showRepoHistory.value = false
+  showProfileHistory.value = false
   if (githubBranchesForUrl.value !== repoURL) {
     isBranchPickerLoading.value = true
     try {
@@ -1021,9 +1027,26 @@ watch(theme, (value) => {
 }, { immediate: true })
 
 const onResize = () => chartInstance?.resize()
-onMounted(() => window.addEventListener('resize', onResize))
+function closePopoversOnOutsidePress(event: PointerEvent) {
+  const target = event.target
+  if (!(target instanceof Node)) return
+  if (
+    repoHistoryControl.value?.contains(target) ||
+    profileHistoryControl.value?.contains(target) ||
+    branchControl.value?.contains(target)
+  ) return
+  showRepoHistory.value = false
+  showProfileHistory.value = false
+  isBranchPickerOpen.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  document.addEventListener('pointerdown', closePopoversOnOutsidePress)
+})
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize)
+  document.removeEventListener('pointerdown', closePopoversOnOutsidePress)
   chartInstance?.dispose()
   chartInstance = null
 })
@@ -1122,17 +1145,23 @@ onBeforeUnmount(() => {
       <div>
         <strong>粘贴 GitHub 仓库</strong>
         <span>输入公开仓库地址，直接分析语言构成</span>
-        <button
-          v-if="repoHistory.length"
-          class="url-history-toggle"
-          type="button"
-          :aria-expanded="showRepoHistory"
-          aria-controls="repo-url-history"
-          :disabled="isBusy"
-          @click="showRepoHistory = !showRepoHistory"
-        >历史记录 {{ repoHistory.length }}
-          <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-        </button>
+        <div v-if="repoHistory.length" ref="repoHistoryControl" class="url-history-control">
+          <button
+            class="url-history-toggle"
+            type="button"
+            :aria-expanded="showRepoHistory"
+            aria-controls="repo-url-history"
+            :disabled="isBusy"
+            @click="showRepoHistory = !showRepoHistory; showProfileHistory = false; isBranchPickerOpen = false"
+          >历史记录 {{ repoHistory.length }}
+            <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          </button>
+          <div v-if="showRepoHistory" id="repo-url-history" class="url-history-list" role="menu">
+            <p>点击记录即可重新分析</p>
+            <button v-for="url in repoHistory" :key="url" type="button" role="menuitem" :title="url" :disabled="isBusy" @click="reuseRepoHistory(url)">{{ url }}</button>
+            <button class="clear-history-button" type="button" @click="clearUrlHistory">清除全部历史记录</button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="gh-input">
@@ -1174,38 +1203,28 @@ onBeforeUnmount(() => {
         分析
       </AppButton>
     </div>
-      <motion.div
-        v-if="repoHistory.length"
-        id="repo-url-history"
-        class="url-history-list"
-        aria-label="仓库历史记录"
-        :aria-hidden="!showRepoHistory"
-        :inert="!showRepoHistory"
-        :initial="false"
-        :animate="historyState(showRepoHistory)"
-        :transition="spring"
-        :style="{ pointerEvents: showRepoHistory ? 'auto' : 'none' }"
-      >
-        <p>点击记录即可重新分析</p>
-        <button v-for="url in repoHistory" :key="url" type="button" :title="url" :disabled="isBusy" @click="reuseRepoHistory(url)">{{ url }}</button>
-      </motion.div>
-
     <div class="profile-picker">
       <div class="profile-picker-heading">
         <div>
           <strong>从作者主页选择仓库</strong>
           <span>仅展示本人公开、未归档且非 Fork 的仓库</span>
-          <button
-            v-if="profileHistory.length"
-            class="url-history-toggle"
-            type="button"
-            :aria-expanded="showProfileHistory"
-            aria-controls="profile-url-history"
-            :disabled="isProfileLoading"
-            @click="showProfileHistory = !showProfileHistory"
-          >历史记录 {{ profileHistory.length }}
-            <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-          </button>
+          <div v-if="profileHistory.length" ref="profileHistoryControl" class="url-history-control">
+            <button
+              class="url-history-toggle"
+              type="button"
+              :aria-expanded="showProfileHistory"
+              aria-controls="profile-url-history"
+              :disabled="isProfileLoading"
+              @click="showProfileHistory = !showProfileHistory; showRepoHistory = false; isBranchPickerOpen = false"
+            >历史记录 {{ profileHistory.length }}
+              <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+            </button>
+            <div v-if="showProfileHistory" id="profile-url-history" class="url-history-list" role="menu">
+              <p>点击记录即可重新读取仓库</p>
+              <button v-for="url in profileHistory" :key="url" type="button" role="menuitem" :title="url" :disabled="isProfileLoading" @click="reuseProfileHistory(url)">{{ url }}</button>
+              <button class="clear-history-button" type="button" @click="clearUrlHistory">清除全部历史记录</button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="gh-input profile-input">
@@ -1250,21 +1269,6 @@ onBeforeUnmount(() => {
           </template>
         </AppButton>
       </div>
-      <motion.div
-        v-if="profileHistory.length"
-          id="profile-url-history"
-          class="url-history-list"
-          aria-label="作者主页历史记录"
-          :aria-hidden="!showProfileHistory"
-          :inert="!showProfileHistory"
-          :initial="false"
-          :animate="historyState(showProfileHistory)"
-          :transition="spring"
-          :style="{ pointerEvents: showProfileHistory ? 'auto' : 'none' }"
-        >
-          <p>点击记录即可重新读取仓库</p>
-          <button v-for="url in profileHistory" :key="url" type="button" :title="url" :disabled="isProfileLoading" @click="reuseProfileHistory(url)">{{ url }}</button>
-        </motion.div>
     </div>
     </div>
   </motion.section>
@@ -1392,7 +1396,7 @@ onBeforeUnmount(() => {
           共 {{ formatBytes(result.totalBytes) }} · {{ result.languages.length }} 种语言
           <span v-if="topLang"> · 主要 <strong>{{ topLang.name }}</strong> {{ topLang.percentage }}%</span>
         </span>
-        <div v-if="result.githubUrl" class="branch-control">
+        <div v-if="result.githubUrl" ref="branchControl" class="branch-control">
           <span>当前分支</span>
           <button
             type="button"

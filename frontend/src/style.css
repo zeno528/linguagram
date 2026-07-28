@@ -380,17 +380,18 @@ header p {
 .source-picker-heading span,
 .profile-picker-heading span { color: var(--muted); font-size: 12px; }
 .source-picker-heading + .gh-input { margin-top: 10px; }
+.url-history-control { position: relative; display: inline-flex; }
 .url-history-toggle {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-height: 28px;
-  padding: 4px 8px;
+  gap: 5px;
+  min-height: 30px;
+  padding: 4px 10px;
   border: 1px solid var(--hairline-strong);
-  border-radius: 7px;
-  background: transparent;
-  color: var(--muted);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  color: var(--fg);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -411,14 +412,23 @@ header p {
 }
 .url-history-toggle[aria-expanded='true'] .history-chevron { transform: rotate(180deg); }
 .url-history-list {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 8px);
+  left: 0;
   display: grid;
-  overflow: hidden;
+  width: max-content;
+  min-width: 220px;
+  max-width: min(480px, calc(100vw - 56px));
+  max-height: 230px;
+  overflow-x: hidden;
+  overflow-y: auto;
   gap: 5px;
   padding: 10px;
   border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: var(--surface-inset);
-  will-change: height, opacity, transform, margin-top;
+  border-radius: 12px;
+  background: var(--surface-solid);
+  box-shadow: var(--keyline), var(--shadow-2);
 }
 .url-history-list p { margin: 0 0 2px; color: var(--muted); font-size: 12px; }
 .url-history-list button {
@@ -441,6 +451,8 @@ header p {
 .url-history-list button:hover:not(:disabled) { background: var(--surface-solid); color: var(--accent); text-decoration-color: currentColor; }
 .url-history-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .url-history-list button:disabled { cursor: default; opacity: 0.55; }
+.url-history-list .clear-history-button { margin-top: 4px; border-top: 1px solid var(--hairline); border-radius: 0; color: var(--muted); text-align: center; }
+.url-history-list .clear-history-button:hover { color: var(--danger); }
 .profile-picker { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--hairline); }
 .profile-input { margin-top: 10px; }
 .profile-repo-list { margin: 0; overflow: hidden; border: 1px solid var(--hairline); border-radius: 16px; background: var(--surface-solid); box-shadow: var(--keyline), var(--shadow-1); will-change: height, transform, opacity; }
