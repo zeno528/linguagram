@@ -162,13 +162,13 @@ function loadEcharts() {
   if (!echartsPromise) {
     echartsPromise = (async () => {
       const echarts = await import('echarts/core')
-      const [{ PieChart, BarChart }, { TooltipComponent, GridComponent }, { CanvasRenderer }] =
+      const [{ PieChart, BarChart }, { TitleComponent, TooltipComponent, GridComponent }, { CanvasRenderer }] =
         await Promise.all([
           import('echarts/charts'),
           import('echarts/components'),
           import('echarts/renderers'),
         ])
-      echarts.use([PieChart, BarChart, TooltipComponent, GridComponent, CanvasRenderer])
+      echarts.use([PieChart, BarChart, TitleComponent, TooltipComponent, GridComponent, CanvasRenderer])
       return echarts
     })()
   }
@@ -902,14 +902,18 @@ async function renderChart() {
     return
   }
 
-  const primaryLanguage = displayData.reduce((primary, item) =>
-    item.value > primary.value ? item : primary,
-  )
+  const selectedLanguage = selectedChartLanguage.value
+    ? displayData.find((item) => item.name === selectedChartLanguage.value)
+    : null
+  const centerText = selectedLanguage ? selectedLanguage.name : formatBytes(result.value.totalBytes)
+  const centerSubtext = selectedLanguage
+    ? `${selectedLanguage.value.toFixed(2)}%`
+    : '项目总代码'
 
   chart.setOption({
     title: {
-      text: `${langs.length} 种语言`,
-      subtext: `主要 ${primaryLanguage.name} · ${primaryLanguage.value.toFixed(2)}%`,
+      text: centerText,
+      subtext: centerSubtext,
       left: 'center',
       top: 'center',
       itemGap: 4,
@@ -943,7 +947,6 @@ async function renderChart() {
         length2: 8,
         lineStyle: { color: hairline, width: 1 },
       },
-      labelLayout: { hideOverlap: true },
       emphasis: {
         scale: true,
         scaleSize: 8,
