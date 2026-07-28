@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { AnimatePresence, motion } from 'motion-v'
+import { motion } from 'motion-v'
 import type { ECharts } from 'echarts/core'
 import {
   siAngular,
@@ -210,11 +210,16 @@ const rowTransition = (index: number) => ({
   ...spring,
   delay: Math.min(0.1 + index * 0.04, 0.5),
 })
-// The history panel owns its margin as part of the motion. Otherwise the
-// static 10px CSS margin is removed only after exit and produces a final jump.
-const historyInitial = computed(() => ({ ...expandInitial.value, marginTop: 0 }))
-const historyAnimate = { ...expandAnimate, marginTop: 10 }
-const historyExit = computed(() => ({ ...expandExit.value, marginTop: 0 }))
+// Keep a history panel mounted while records exist. Its own height is the only
+// changing layout value, so the surrounding form card follows without scaling.
+function historyState(isOpen: boolean) {
+  if (reduce.value) {
+    return { height: isOpen ? 'auto' : 0, opacity: isOpen ? 1 : 0, marginTop: isOpen ? 10 : 0 }
+  }
+  return isOpen
+    ? { ...expandAnimate, marginTop: 10 }
+    : { height: 0, opacity: 0, y: -8, marginTop: 0 }
+}
 const profilePickerInitial = expandInitial
 const profilePickerAnimate = computed(() => {
   return expandState(isProfilePickerOpen.value)
@@ -423,6 +428,9 @@ async function analyzeCollectedFiles(projectName: string, collected: CollectedFi
 
 async function runFolderAnalysis(projectName: string, collect: () => Promise<CollectedFile[]>) {
   analysisSource.value = 'local'
+  showImportPanel.value = false
+  showRepoHistory.value = false
+  showProfileHistory.value = false
   cancelToken = { aborted: false }
   currentController = new AbortController()
   // Load chart chunks while the local files are being collected and analyzed.
@@ -523,6 +531,9 @@ async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>) {
   rememberUrl('repo', url)
 
   analysisSource.value = source
+  showImportPanel.value = false
+  showRepoHistory.value = false
+  showProfileHistory.value = false
   cancelToken = { aborted: false }
   currentController = new AbortController()
   // Load chart chunks while the GitHub request is in flight.
@@ -1006,8 +1017,7 @@ onBeforeUnmount(() => {
   </header>
 
   <motion.section
-    v-if="showImportPanel || !result"
-    layout
+    v-if="showImportPanel || (!result && !isBusy)"
     class="scan-card"
     :initial="cardEnter"
     :animate="cardAnimate"
@@ -1058,7 +1068,9 @@ onBeforeUnmount(() => {
         aria-controls="repo-url-history"
         :disabled="isBusy"
         @click="showRepoHistory = !showRepoHistory"
-      >历史记录 {{ repoHistory.length }}</button>
+      >历史记录 {{ repoHistory.length }}
+        <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+      </button>
     </div>
     <div class="gh-input">
       <div class="gh-field" :class="{ disabled: isBusy }">
@@ -1099,21 +1111,21 @@ onBeforeUnmount(() => {
         分析
       </AppButton>
     </div>
-    <AnimatePresence>
       <motion.div
-        v-if="showRepoHistory && repoHistory.length"
+        v-if="repoHistory.length"
         id="repo-url-history"
         class="url-history-list"
         aria-label="仓库历史记录"
-        :initial="historyInitial"
-        :animate="historyAnimate"
-        :exit="historyExit"
+        :aria-hidden="!showRepoHistory"
+        :inert="!showRepoHistory"
+        :initial="false"
+        :animate="historyState(showRepoHistory)"
         :transition="spring"
+        :style="{ pointerEvents: showRepoHistory ? 'auto' : 'none' }"
       >
         <p>点击记录即可重新分析</p>
         <button v-for="url in repoHistory" :key="url" type="button" :title="url" :disabled="isBusy" @click="reuseRepoHistory(url)">{{ url }}</button>
       </motion.div>
-    </AnimatePresence>
 
     <div class="profile-picker">
       <div class="profile-picker-heading">
@@ -1129,7 +1141,9 @@ onBeforeUnmount(() => {
           aria-controls="profile-url-history"
           :disabled="isProfileLoading"
           @click="showProfileHistory = !showProfileHistory"
-        >历史记录 {{ profileHistory.length }}</button>
+        >历史记录 {{ profileHistory.length }}
+          <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+        </button>
       </div>
       <div class="gh-input profile-input">
         <div class="gh-field" :class="{ disabled: isProfileLoading }">
@@ -1173,21 +1187,21 @@ onBeforeUnmount(() => {
           </template>
         </AppButton>
       </div>
-      <AnimatePresence>
-        <motion.div
-          v-if="showProfileHistory && profileHistory.length"
+      <motion.div
+        v-if="profileHistory.length"
           id="profile-url-history"
           class="url-history-list"
           aria-label="作者主页历史记录"
-          :initial="historyInitial"
-          :animate="historyAnimate"
-          :exit="historyExit"
+          :aria-hidden="!showProfileHistory"
+          :inert="!showProfileHistory"
+          :initial="false"
+          :animate="historyState(showProfileHistory)"
           :transition="spring"
+          :style="{ pointerEvents: showProfileHistory ? 'auto' : 'none' }"
         >
           <p>点击记录即可重新读取仓库</p>
           <button v-for="url in profileHistory" :key="url" type="button" :title="url" :disabled="isProfileLoading" @click="reuseProfileHistory(url)">{{ url }}</button>
         </motion.div>
-      </AnimatePresence>
     </div>
     </div>
   </motion.section>
