@@ -948,7 +948,6 @@ async function renderChart() {
   const centerSubtext = selectedLanguage
     ? `${selectedLanguage.value.toFixed(2)}%`
     : '项目总代码'
-
   chart.setOption({
     title: {
       text: centerText,
@@ -969,11 +968,13 @@ async function renderChart() {
       avoidLabelOverlap: true,
       // White seams separate slices against the solid pie-box face (same role
       // as GitHub's separators, retained for readability).
-      itemStyle: { borderColor: pieSeam, borderWidth: 2, borderRadius: 4 },
-      minShowLabelAngle: 4,
+      itemStyle: { borderColor: pieSeam, borderWidth: 1, borderRadius: 4 },
+      // Small slices remain visible by color; the legend and table carry their details.
+      minShowLabelAngle: 12,
       label: {
         show: true,
         position: 'outside',
+        distanceToLabelLine: 4,
         color: fg,
         fontFamily: font,
         fontSize: 11,
