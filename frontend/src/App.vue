@@ -182,7 +182,6 @@ const {
   quickSpring: pickerSpring,
   expandInitial,
   expandAnimate,
-  expandExit,
   expandState,
 } = useMotionPresets()
 
@@ -228,6 +227,12 @@ const profilePickerStyle = computed(() => ({
   marginBottom: isProfilePickerOpen.value ? '20px' : '0px',
   pointerEvents: isProfilePickerOpen.value ? 'auto' : 'none',
 }))
+
+function hideImportDuringAnalysis() {
+  showImportPanel.value = false
+  showRepoHistory.value = false
+  showProfileHistory.value = false
+}
 
 // ---------- drop mode ----------
 // Directories skipped before reading — mirrors enry's vendor heuristic so we
@@ -428,9 +433,7 @@ async function analyzeCollectedFiles(projectName: string, collected: CollectedFi
 
 async function runFolderAnalysis(projectName: string, collect: () => Promise<CollectedFile[]>) {
   analysisSource.value = 'local'
-  showImportPanel.value = false
-  showRepoHistory.value = false
-  showProfileHistory.value = false
+  hideImportDuringAnalysis()
   cancelToken = { aborted: false }
   currentController = new AbortController()
   // Load chart chunks while the local files are being collected and analyzed.
@@ -531,9 +534,7 @@ async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>) {
   rememberUrl('repo', url)
 
   analysisSource.value = source
-  showImportPanel.value = false
-  showRepoHistory.value = false
-  showProfileHistory.value = false
+  hideImportDuringAnalysis()
   cancelToken = { aborted: false }
   currentController = new AbortController()
   // Load chart chunks while the GitHub request is in flight.
@@ -711,7 +712,6 @@ function analyzeProfileRepo(repo: PublicRepo) {
 
 function reuseRepoHistory(url: string) {
   githubUrl.value = url
-  showRepoHistory.value = false
   void analyzeGithub('repo')
 }
 
