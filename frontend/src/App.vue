@@ -902,21 +902,48 @@ async function renderChart() {
     return
   }
 
+  const primaryLanguage = displayData.reduce((primary, item) =>
+    item.value > primary.value ? item : primary,
+  )
+
   chart.setOption({
+    title: {
+      text: `${langs.length} 种语言`,
+      subtext: `主要 ${primaryLanguage.name} · ${primaryLanguage.value.toFixed(2)}%`,
+      left: 'center',
+      top: 'center',
+      itemGap: 4,
+      textStyle: { color: fg, fontFamily: font, fontSize: 14, fontWeight: 650 },
+      subtextStyle: { color: muted, fontFamily: font, fontSize: 11, lineHeight: 16 },
+    },
     tooltip,
     series: [{
       type: 'pie',
-      // The adjacent language table is the chart legend. Keeping a second,
-      // scrollable legend inside this fixed-height canvas makes its rows run
-      // into the pie as a project gains languages.
-      radius: ['0%', '62%'],
+      // Keep a concise summary in the centre and use native guide lines for
+      // the major slices. The adjacent table still exposes every language.
+      radius: ['38%', '58%'],
       center: ['50%', '50%'],
       avoidLabelOverlap: true,
       // White seams separate slices against the solid pie-box face (same role
       // as GitHub's separators, retained for readability).
       itemStyle: { borderColor: pieSeam, borderWidth: 2, borderRadius: 4 },
-      label: { show: false },
-      labelLine: { show: false },
+      minShowLabelAngle: 4,
+      label: {
+        show: true,
+        position: 'outside',
+        color: fg,
+        fontFamily: font,
+        fontSize: 11,
+        lineHeight: 15,
+        formatter: (p: any) => `${p.name}\n${Number(p.percent).toFixed(1)}%`,
+      },
+      labelLine: {
+        show: true,
+        length: 10,
+        length2: 8,
+        lineStyle: { color: hairline, width: 1 },
+      },
+      labelLayout: { hideOverlap: true },
       emphasis: {
         scale: true,
         scaleSize: 8,
