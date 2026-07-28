@@ -1089,18 +1089,18 @@ onBeforeUnmount(() => {
       <div>
         <strong>粘贴 GitHub 仓库</strong>
         <span>输入公开仓库地址，直接分析语言构成</span>
+        <button
+          v-if="repoHistory.length"
+          class="url-history-toggle"
+          type="button"
+          :aria-expanded="showRepoHistory"
+          aria-controls="repo-url-history"
+          :disabled="isBusy"
+          @click="showRepoHistory = !showRepoHistory"
+        >历史记录 {{ repoHistory.length }}
+          <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+        </button>
       </div>
-      <button
-        v-if="repoHistory.length"
-        class="url-history-toggle"
-        type="button"
-        :aria-expanded="showRepoHistory"
-        aria-controls="repo-url-history"
-        :disabled="isBusy"
-        @click="showRepoHistory = !showRepoHistory"
-      >历史记录 {{ repoHistory.length }}
-        <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-      </button>
     </div>
     <div class="gh-input">
       <div class="gh-field" :class="{ disabled: isBusy }">
@@ -1162,18 +1162,18 @@ onBeforeUnmount(() => {
         <div>
           <strong>从作者主页选择仓库</strong>
           <span>仅展示本人公开、未归档且非 Fork 的仓库</span>
+          <button
+            v-if="profileHistory.length"
+            class="url-history-toggle"
+            type="button"
+            :aria-expanded="showProfileHistory"
+            aria-controls="profile-url-history"
+            :disabled="isProfileLoading"
+            @click="showProfileHistory = !showProfileHistory"
+          >历史记录 {{ profileHistory.length }}
+            <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          </button>
         </div>
-        <button
-          v-if="profileHistory.length"
-          class="url-history-toggle"
-          type="button"
-          :aria-expanded="showProfileHistory"
-          aria-controls="profile-url-history"
-          :disabled="isProfileLoading"
-          @click="showProfileHistory = !showProfileHistory"
-        >历史记录 {{ profileHistory.length }}
-          <svg class="history-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-        </button>
       </div>
       <div class="gh-input profile-input">
         <div class="gh-field" :class="{ disabled: isProfileLoading }">

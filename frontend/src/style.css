@@ -372,7 +372,7 @@ header p {
 .gh-icon-btn svg { display: block; }
 
 .source-picker-heading,
-.profile-picker-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.profile-picker-heading { display: flex; align-items: flex-start; }
 .source-picker-heading > div,
 .profile-picker-heading > div { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
 .source-picker-heading strong,
