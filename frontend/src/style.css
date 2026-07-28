@@ -229,6 +229,11 @@ header p {
   padding: 24px;
   margin-bottom: 20px;
 }
+.scan-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 370px;
+}
 /* ---------------- dropzone ---------------- */
 .import-mode-switch {
   display: inline-flex;
@@ -262,7 +267,17 @@ header p {
 .import-mode-button:hover:not(:disabled):not(.active) { color: var(--fg); }
 .import-mode-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .import-mode-button:disabled { cursor: default; opacity: 0.55; }
+.import-mode-panel {
+  overflow: visible;
+}
 .import-mode-panel[hidden] { display: none; }
+#local-import-panel { display: flex; flex: 1; flex-direction: column; }
+#local-import-panel[hidden] { display: none; }
+#local-import-panel .dropzone {
+  flex: 1;
+  display: grid;
+  place-content: center;
+}
 .dropzone {
   position: relative;
   border-radius: 16px;
@@ -383,12 +398,13 @@ header p {
 .url-history-toggle:disabled { cursor: default; opacity: 0.55; }
 .url-history-list {
   display: grid;
+  overflow: hidden;
   gap: 5px;
-  margin-top: 10px;
   padding: 10px;
   border: 1px solid var(--hairline);
   border-radius: 10px;
   background: var(--surface-inset);
+  will-change: height, opacity, transform, margin-top;
 }
 .url-history-list p { margin: 0 0 2px; color: var(--muted); font-size: 12px; }
 .url-history-list button {
@@ -738,6 +754,7 @@ header p {
   .language-panel { min-height: 420px; max-height: 420px; }
 
   .import-mode-switch { margin-bottom: 14px; }
+  .scan-card { min-height: 368px; }
   .import-mode-button { min-height: 44px; padding-inline: 8px; font-size: 12px; }
   .dropzone { padding: 24px 14px; }
   .gh-input { margin-top: 0; }

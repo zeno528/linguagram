@@ -210,6 +210,11 @@ const rowTransition = (index: number) => ({
   ...spring,
   delay: Math.min(0.1 + index * 0.04, 0.5),
 })
+// The history panel owns its margin as part of the motion. Otherwise the
+// static 10px CSS margin is removed only after exit and produces a final jump.
+const historyInitial = computed(() => ({ ...expandInitial.value, marginTop: 0 }))
+const historyAnimate = { ...expandAnimate, marginTop: 10 }
+const historyExit = computed(() => ({ ...expandExit.value, marginTop: 0 }))
 const profilePickerInitial = expandInitial
 const profilePickerAnimate = computed(() => {
   return expandState(isProfilePickerOpen.value)
@@ -920,8 +925,8 @@ watch(() => result.value, () => {
   selectedChartLanguage.value = null
   languageQuery.value = ''
 })
-watch(activeCard, async (card) => {
-  if (card !== 'result') return
+watch([() => result.value, () => isBusy.value], async ([scanResult, busy]) => {
+  if (!scanResult || busy) return
   showImportPanel.value = false
   isProfilePickerOpen.value = false
   isProfileOwnerEditorOpen.value = false
@@ -1000,7 +1005,14 @@ onBeforeUnmount(() => {
     </div>
   </header>
 
-  <section v-if="showImportPanel || !result" class="scan-card">
+  <motion.section
+    v-if="showImportPanel || !result"
+    layout
+    class="scan-card"
+    :initial="cardEnter"
+    :animate="cardAnimate"
+    :transition="spring"
+  >
     <div class="import-mode-switch" role="tablist" aria-label="选择分析来源">
       <button id="local-import-tab" class="import-mode-button" :class="{ active: importMode === 'local' }" type="button" role="tab" :aria-selected="importMode === 'local'" aria-controls="local-import-panel" :disabled="isBusy" @click="importMode = 'local'">本地文件夹</button>
       <button id="github-import-tab" class="import-mode-button" :class="{ active: importMode === 'github' }" type="button" role="tab" :aria-selected="importMode === 'github'" aria-controls="github-import-panel" :disabled="isBusy" @click="importMode = 'github'">GitHub 仓库或作者主页</button>
@@ -1091,12 +1103,11 @@ onBeforeUnmount(() => {
       <motion.div
         v-if="showRepoHistory && repoHistory.length"
         id="repo-url-history"
-        layout
         class="url-history-list"
         aria-label="仓库历史记录"
-        :initial="expandInitial"
-        :animate="expandAnimate"
-        :exit="expandExit"
+        :initial="historyInitial"
+        :animate="historyAnimate"
+        :exit="historyExit"
         :transition="spring"
       >
         <p>点击记录即可重新分析</p>
@@ -1166,12 +1177,11 @@ onBeforeUnmount(() => {
         <motion.div
           v-if="showProfileHistory && profileHistory.length"
           id="profile-url-history"
-          layout
           class="url-history-list"
           aria-label="作者主页历史记录"
-          :initial="expandInitial"
-          :animate="expandAnimate"
-          :exit="expandExit"
+          :initial="historyInitial"
+          :animate="historyAnimate"
+          :exit="historyExit"
           :transition="spring"
         >
           <p>点击记录即可重新读取仓库</p>
@@ -1180,7 +1190,7 @@ onBeforeUnmount(() => {
       </AnimatePresence>
     </div>
     </div>
-  </section>
+  </motion.section>
 
   <div v-else class="analysis-toolbar">
     <span>当前查看 {{ result?.projectName }} 的分析结果</span>
