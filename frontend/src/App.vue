@@ -96,6 +96,8 @@ const isProfileLoading = ref(false)
 const showImportPanel = ref(true)
 const isProfilePickerOpen = ref(false)
 const isProfileOwnerEditorOpen = ref(false)
+type ImportMode = 'local' | 'github'
+const importMode = ref<ImportMode>('local')
 type AnalysisSource = 'local' | 'repo' | 'profile' | null
 const analysisSource = ref<AnalysisSource>(null)
 const folderInput = ref<HTMLInputElement | null>(null)
@@ -934,11 +936,11 @@ onBeforeUnmount(() => {
   </header>
 
   <section v-if="showImportPanel || !result" class="scan-card">
-    <!-- Dropzone is the folder-specific entry UI; hide it during analysis
-         (any source — local/GitHub/profile) so its placeholder text doesn't
-         echo the progress status and confuse the user about which entry is
-         analyzing. GitHub URL + profile picker below stay mounted as the
-         disabled "this is the other entry you could've used" affordance. -->
+    <div class="import-mode-switch" role="tablist" aria-label="选择分析来源">
+      <button id="local-import-tab" class="import-mode-button" :class="{ active: importMode === 'local' }" type="button" role="tab" :aria-selected="importMode === 'local'" aria-controls="local-import-panel" :disabled="isBusy" @click="importMode = 'local'">本地文件夹</button>
+      <button id="github-import-tab" class="import-mode-button" :class="{ active: importMode === 'github' }" type="button" role="tab" :aria-selected="importMode === 'github'" aria-controls="github-import-panel" :disabled="isBusy" @click="importMode = 'github'">GitHub 仓库或作者主页</button>
+    </div>
+    <div id="local-import-panel" class="import-mode-panel" role="tabpanel" aria-labelledby="local-import-tab" :hidden="importMode !== 'local'">
     <div
       v-if="!isBusy"
       class="dropzone"
@@ -963,13 +965,15 @@ onBeforeUnmount(() => {
       multiple
       @change="handleFolderSelection"
     />
+    </div>
 
+    <div id="github-import-panel" class="import-mode-panel" role="tabpanel" aria-labelledby="github-import-tab" :hidden="importMode !== 'github'">
     <div class="gh-input">
       <div class="gh-field" :class="{ disabled: isBusy }">
         <input
           v-model="githubUrl"
           type="url"
-          placeholder="或粘贴 GitHub 公开仓库地址，如 https://github.com/owner/repo"
+          placeholder="粘贴 GitHub 公开仓库地址，如 https://github.com/owner/repo"
           :disabled="isBusy"
           @keyup.enter="() => analyzeGithub('repo')"
         />
@@ -1051,6 +1055,7 @@ onBeforeUnmount(() => {
           </template>
         </AppButton>
       </div>
+    </div>
     </div>
   </section>
 
@@ -1294,7 +1299,7 @@ onBeforeUnmount(() => {
   </motion.section>
 
   <footer class="site-footer">
-    © {{ copyrightYear }} Linguagram · made by Scott
+    © {{ copyrightYear }} Linguagram · made by <a href="https://github.com/zeno528/" target="_blank" rel="noopener noreferrer">Scott Z</a>
   </footer>
 
   <ToastHost />
