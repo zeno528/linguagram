@@ -672,7 +672,8 @@ header p {
   line-height: 1.4;
 }
 .lang-table-scroller,
-.profile-repo-scroller {
+.profile-repo-scroller,
+.url-history-list {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
@@ -685,11 +686,14 @@ header p {
 }
 .lang-table-scroller { border-top: 1px solid var(--hairline); }
 .lang-table-scroller::-webkit-scrollbar,
-.profile-repo-scroller::-webkit-scrollbar { width: 10px; height: 10px; }
+.profile-repo-scroller::-webkit-scrollbar,
+.url-history-list::-webkit-scrollbar { width: 10px; height: 10px; }
 .lang-table-scroller::-webkit-scrollbar-track,
-.profile-repo-scroller::-webkit-scrollbar-track { background: var(--surface-solid); }
+.profile-repo-scroller::-webkit-scrollbar-track,
+.url-history-list::-webkit-scrollbar-track { background: var(--surface-solid); }
 .lang-table-scroller::-webkit-scrollbar-thumb,
-.profile-repo-scroller::-webkit-scrollbar-thumb {
+.profile-repo-scroller::-webkit-scrollbar-thumb,
+.url-history-list::-webkit-scrollbar-thumb {
   min-height: 36px;
   border: 3px solid transparent;
   border-radius: 999px;
@@ -699,15 +703,21 @@ header p {
 .lang-table-scroller:hover,
 .lang-table-scroller:focus-within,
 .profile-repo-scroller:hover,
-.profile-repo-scroller:focus-within { scrollbar-color: var(--hairline-strong) var(--surface-solid); }
+.profile-repo-scroller:focus-within,
+.url-history-list:hover,
+.url-history-list:focus-within { scrollbar-color: var(--hairline-strong) var(--surface-solid); }
 .lang-table-scroller:hover::-webkit-scrollbar-thumb,
 .lang-table-scroller:focus-within::-webkit-scrollbar-thumb,
 .profile-repo-scroller:hover::-webkit-scrollbar-thumb,
-.profile-repo-scroller:focus-within::-webkit-scrollbar-thumb { background-color: var(--hairline-strong); }
+.profile-repo-scroller:focus-within::-webkit-scrollbar-thumb,
+.url-history-list:hover::-webkit-scrollbar-thumb,
+.url-history-list:focus-within::-webkit-scrollbar-thumb { background-color: var(--hairline-strong); }
 .lang-table-scroller::-webkit-scrollbar-thumb:hover,
-.profile-repo-scroller::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
+.profile-repo-scroller::-webkit-scrollbar-thumb:hover,
+.url-history-list::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
 .lang-table-scroller::-webkit-scrollbar-corner,
-.profile-repo-scroller::-webkit-scrollbar-corner { background: var(--surface-solid); }
+.profile-repo-scroller::-webkit-scrollbar-corner,
+.url-history-list::-webkit-scrollbar-corner { background: var(--surface-solid); }
 .lang-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; }
 .lang-table th,
 .lang-table td {
