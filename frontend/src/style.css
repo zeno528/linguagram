@@ -232,7 +232,7 @@ header p {
 .scan-card {
   display: flex;
   flex-direction: column;
-  min-height: 370px;
+  min-height: 334px;
 }
 /* ---------------- dropzone ---------------- */
 .import-mode-switch {
@@ -807,7 +807,7 @@ header p {
   .language-panel { min-height: 420px; max-height: 420px; }
 
   .import-mode-switch { margin-bottom: 14px; }
-  .scan-card { min-height: 368px; }
+  .scan-card { min-height: 334px; }
   .import-mode-button { min-height: 44px; padding-inline: 8px; font-size: 12px; }
   .dropzone { padding: 24px 14px; }
   .gh-input { margin-top: 0; }
