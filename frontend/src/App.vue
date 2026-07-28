@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { motion, useReducedMotion } from 'motion-v'
+import { AnimatePresence, motion } from 'motion-v'
 import type { ECharts } from 'echarts/core'
 import {
   siAngular,
@@ -51,6 +51,7 @@ import AppButton from './components/AppButton.vue'
 import AppProgress from './components/AppProgress.vue'
 import ToastHost from './components/ToastHost.vue'
 import { useToast } from './composables/useToast'
+import { useMotionPresets } from './composables/useMotionPresets'
 
 const toast = useToast()
 
@@ -96,6 +97,40 @@ const isProfileLoading = ref(false)
 const showImportPanel = ref(true)
 const isProfilePickerOpen = ref(false)
 const isProfileOwnerEditorOpen = ref(false)
+type HistoryKind = 'repo' | 'profile'
+type UrlHistory = Record<HistoryKind, string[]>
+const URL_HISTORY_STORAGE_KEY = 'linguagram-url-history-v1'
+const emptyUrlHistory = (): UrlHistory => ({ repo: [], profile: [] })
+
+function readUrlHistory(): UrlHistory {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(URL_HISTORY_STORAGE_KEY) ?? '{}')
+    const clean = (value: unknown) => Array.isArray(value)
+      ? value.filter((url): url is string => typeof url === 'string' && url.length > 0).slice(0, 8)
+      : []
+    return { repo: clean(stored.repo), profile: clean(stored.profile) }
+  } catch {
+    return emptyUrlHistory()
+  }
+}
+
+const urlHistory = ref<UrlHistory>(readUrlHistory())
+const showRepoHistory = ref(false)
+const showProfileHistory = ref(false)
+const repoHistory = computed(() => urlHistory.value.repo)
+const profileHistory = computed(() => urlHistory.value.profile)
+
+function rememberUrl(kind: HistoryKind, value: string) {
+  const url = value.trim()
+  if (!url) return
+  const entries = [url, ...urlHistory.value[kind].filter((entry) => entry !== url)].slice(0, 8)
+  urlHistory.value = { ...urlHistory.value, [kind]: entries }
+  try {
+    window.localStorage.setItem(URL_HISTORY_STORAGE_KEY, JSON.stringify(urlHistory.value))
+  } catch {
+    // Browsers can disable local storage. Analysis stays available without it.
+  }
+}
 type ImportMode = 'local' | 'github'
 const importMode = ref<ImportMode>('local')
 type AnalysisSource = 'local' | 'repo' | 'profile' | null
@@ -140,33 +175,44 @@ function loadEcharts() {
   return echartsPromise
 }
 
-// ---- shared motion config ----
-// §4: critically-damped spring by default (bounce 0, no overshoot). §14:
-// under prefers-reduced-motion, collapse enter/exit to opacity-only so the
-// motion stays non-vestibular. bounce/duration map to Apple's damping+response.
-const reduce = useReducedMotion()
-const spring = { type: 'spring' as const, bounce: 0, duration: 0.4 }
-const pickerSpring = { type: 'spring' as const, bounce: 0, duration: 0.36 }
-const cardAnimate = { opacity: 1, y: 0, scale: 1 }
+// Shared timing, reduced-motion preference, and disclosure behavior live here.
+const {
+  reduce,
+  standardSpring: spring,
+  quickSpring: pickerSpring,
+  expandInitial,
+  expandAnimate,
+  expandExit,
+  expandState,
+} = useMotionPresets()
+
+// These movement distances describe this page's individual elements, so they
+// stay local instead of turning the shared module into a list of one-off presets.
+const headerEnter = computed(() => (reduce.value ? { opacity: 0 } : { opacity: 0, y: -10 }))
+const headerAnimate = { opacity: 1, y: 0 }
 const cardEnter = computed(() =>
   reduce.value ? { opacity: 0 } : { opacity: 0, y: 14, scale: 0.98 },
 )
-// Language-bar segments grow out from the left with a touch of bounce — they
-// carry the momentum of the result arriving (§4 momentum ⇒ bounce allowed).
-const segEnter = computed(() =>
+const cardAnimate = { opacity: 1, y: 0, scale: 1 }
+const segmentEnter = computed(() =>
   reduce.value ? { opacity: 0 } : { opacity: 0, scaleX: 0 },
 )
-// Table rows fade+offset in; opacity-only is safe on <tr> (transform on
-// table-row is inconsistent across browsers).
+const segmentAnimate = { opacity: 1, scaleX: 1 }
 const rowEnter = computed(() => (reduce.value ? { opacity: 0 } : { opacity: 0, y: 6 }))
-const profilePickerInitial = computed(() =>
-  reduce.value ? { opacity: 0 } : { height: 0, opacity: 0, y: -8 },
-)
+const rowAnimate = { opacity: 1, y: 0 }
+const segmentTransition = (index: number) => ({
+  type: 'spring' as const,
+  bounce: 0.2,
+  duration: 0.5,
+  delay: index * 0.05,
+})
+const rowTransition = (index: number) => ({
+  ...spring,
+  delay: Math.min(0.1 + index * 0.04, 0.5),
+})
+const profilePickerInitial = expandInitial
 const profilePickerAnimate = computed(() => {
-  if (reduce.value) return { opacity: isProfilePickerOpen.value ? 1 : 0 }
-  return isProfilePickerOpen.value
-    ? { height: 'auto', opacity: 1, y: 0 }
-    : { height: 0, opacity: 0, y: -8 }
+  return expandState(isProfilePickerOpen.value)
 })
 const profilePickerStyle = computed(() => ({
   marginBottom: isProfilePickerOpen.value ? '20px' : '0px',
@@ -469,6 +515,7 @@ async function handleFolderSelection(e: Event) {
 async function analyzeGithub(source: Exclude<AnalysisSource, 'local' | null>) {
   const url = githubUrl.value.trim()
   if (!url) return
+  rememberUrl('repo', url)
 
   analysisSource.value = source
   cancelToken = { aborted: false }
@@ -513,8 +560,13 @@ async function pasteFromClipboard(target: 'repo' | 'profile' = 'repo') {
       toast.info('剪贴板为空')
       return
     }
-    if (target === 'profile') profileUrl.value = text
-    else githubUrl.value = text
+    if (target === 'profile') {
+      profileUrl.value = text
+      rememberUrl('profile', text)
+    } else {
+      githubUrl.value = text
+      rememberUrl('repo', text)
+    }
     toast.success('已粘贴')
   } catch {
     toast.error('读取剪贴板失败，请手动粘贴')
@@ -617,6 +669,7 @@ const filteredProfileRepos = computed(() => {
 async function loadProfileRepos() {
   const url = profileUrl.value.trim()
   if (!url || isProfileLoading.value) return
+  rememberUrl('profile', url)
   isProfileLoading.value = true
   isProfilePickerOpen.value = false
   try {
@@ -638,6 +691,18 @@ function analyzeProfileRepo(repo: PublicRepo) {
   githubUrl.value = repo.url
   isProfilePickerOpen.value = false
   void analyzeGithub('profile')
+}
+
+function reuseRepoHistory(url: string) {
+  githubUrl.value = url
+  showRepoHistory.value = false
+  void analyzeGithub('repo')
+}
+
+function reuseProfileHistory(url: string) {
+  profileUrl.value = url
+  showProfileHistory.value = false
+  void loadProfileRepos()
 }
 
 function openImportPanel() {
@@ -888,8 +953,8 @@ onBeforeUnmount(() => {
 <template>
   <header
     v-motion
-    :initial="reduce ? { opacity: 0 } : { opacity: 0, y: -10 }"
-    :animate="{ opacity: 1, y: 0 }"
+    :initial="headerEnter"
+    :animate="headerAnimate"
     :transition="spring"
   >
     <div class="header-row">
@@ -968,6 +1033,21 @@ onBeforeUnmount(() => {
     </div>
 
     <div id="github-import-panel" class="import-mode-panel" role="tabpanel" aria-labelledby="github-import-tab" :hidden="importMode !== 'github'">
+    <div class="source-picker-heading">
+      <div>
+        <strong>粘贴 GitHub 仓库</strong>
+        <span>输入公开仓库地址，直接分析语言构成</span>
+      </div>
+      <button
+        v-if="repoHistory.length"
+        class="url-history-toggle"
+        type="button"
+        :aria-expanded="showRepoHistory"
+        aria-controls="repo-url-history"
+        :disabled="isBusy"
+        @click="showRepoHistory = !showRepoHistory"
+      >历史记录 {{ repoHistory.length }}</button>
+    </div>
     <div class="gh-input">
       <div class="gh-field" :class="{ disabled: isBusy }">
         <input
@@ -1007,11 +1087,38 @@ onBeforeUnmount(() => {
         分析
       </AppButton>
     </div>
+    <AnimatePresence>
+      <motion.div
+        v-if="showRepoHistory && repoHistory.length"
+        id="repo-url-history"
+        layout
+        class="url-history-list"
+        aria-label="仓库历史记录"
+        :initial="expandInitial"
+        :animate="expandAnimate"
+        :exit="expandExit"
+        :transition="spring"
+      >
+        <p>点击记录即可重新分析</p>
+        <button v-for="url in repoHistory" :key="url" type="button" :title="url" :disabled="isBusy" @click="reuseRepoHistory(url)">{{ url }}</button>
+      </motion.div>
+    </AnimatePresence>
 
     <div class="profile-picker">
       <div class="profile-picker-heading">
-        <strong>从作者主页选择仓库</strong>
-        <span>仅展示本人公开、未归档且非 Fork 的仓库</span>
+        <div>
+          <strong>从作者主页选择仓库</strong>
+          <span>仅展示本人公开、未归档且非 Fork 的仓库</span>
+        </div>
+        <button
+          v-if="profileHistory.length"
+          class="url-history-toggle"
+          type="button"
+          :aria-expanded="showProfileHistory"
+          aria-controls="profile-url-history"
+          :disabled="isProfileLoading"
+          @click="showProfileHistory = !showProfileHistory"
+        >历史记录 {{ profileHistory.length }}</button>
       </div>
       <div class="gh-input profile-input">
         <div class="gh-field" :class="{ disabled: isProfileLoading }">
@@ -1055,6 +1162,22 @@ onBeforeUnmount(() => {
           </template>
         </AppButton>
       </div>
+      <AnimatePresence>
+        <motion.div
+          v-if="showProfileHistory && profileHistory.length"
+          id="profile-url-history"
+          layout
+          class="url-history-list"
+          aria-label="作者主页历史记录"
+          :initial="expandInitial"
+          :animate="expandAnimate"
+          :exit="expandExit"
+          :transition="spring"
+        >
+          <p>点击记录即可重新读取仓库</p>
+          <button v-for="url in profileHistory" :key="url" type="button" :title="url" :disabled="isProfileLoading" @click="reuseProfileHistory(url)">{{ url }}</button>
+        </motion.div>
+      </AnimatePresence>
     </div>
     </div>
   </section>
@@ -1190,9 +1313,9 @@ onBeforeUnmount(() => {
           v-for="(l, i) in result.languages"
           :key="l.name"
           v-motion
-          :initial="segEnter"
-          :animate="{ opacity: 1, scaleX: 1 }"
-          :transition="{ type: 'spring', bounce: 0.2, duration: 0.5, delay: i * 0.05 }"
+          :initial="segmentEnter"
+          :animate="segmentAnimate"
+          :transition="segmentTransition(i)"
           class="seg"
           :style="{ width: l.percentage + '%', background: l.color, transformOrigin: 'left' }"
         />
@@ -1253,8 +1376,8 @@ onBeforeUnmount(() => {
                   v-motion
                   :class="{ active: selectedChartLanguage === l.name }"
                   :initial="rowEnter"
-                  :animate="{ opacity: 1, y: 0 }"
-                  :transition="{ type: 'spring', bounce: 0, duration: 0.4, delay: Math.min(0.1 + i * 0.04, 0.5) }"
+                  :animate="rowAnimate"
+                  :transition="rowTransition(i)"
                 >
                   <td>
                     <button

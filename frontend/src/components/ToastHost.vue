@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { AnimatePresence, useReducedMotion } from 'motion-v'
+import { AnimatePresence } from 'motion-v'
 import { useToast } from '../composables/useToast'
+import { useMotionPresets } from '../composables/useMotionPresets'
 
 // Replaces ElMessage. A single host is mounted once in App.vue and teleports
 // to <body>; any component pushes via useToast(). Enter/exit run on a spring
 // (§4 critically-damped default), downgraded to an opacity cross-fade when the
 // user prefers reduced motion (§14).
 const { toasts, dismiss } = useToast()
-const reduce = useReducedMotion()
-
-const enter = computed(() => (reduce.value ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 }))
-const exit = computed(() => (reduce.value ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.98 }))
-const spring = { type: 'spring', bounce: 0, duration: 0.4 }
+const { reduce, standardSpring: spring } = useMotionPresets()
+const enter = computed(() =>
+  reduce.value ? { opacity: 0 } : { opacity: 0, y: -16, scale: 0.96 },
+)
+const animate = { opacity: 1, y: 0, scale: 1 }
+const exit = computed(() =>
+  reduce.value ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.98 },
+)
 </script>
 
 <template>
@@ -24,7 +28,7 @@ const spring = { type: 'spring', bounce: 0, duration: 0.4 }
           :key="t.id"
           v-motion
           :initial="enter"
-          :animate="{ opacity: 1, y: 0, scale: 1 }"
+          :animate="animate"
           :exit="exit"
           :transition="spring"
           class="toast"
